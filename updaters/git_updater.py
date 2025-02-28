@@ -24,6 +24,22 @@ class GitUpdater(BaseUpdater):
             TextColumn("[progress.description]{task.description}"),
             console=Console()
         ) as progress:
+            # Check for uncommitted changes first
+            task = progress.add_task(f"[cyan]Checking repository status {repo.name}", total=None)
+            status_result = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=repo,
+                check=False,
+                capture_output=True,
+                text=True
+            )
+
+            if status_result.stdout.strip():
+                progress.update(task, description=f"[yellow]Warning: Repository {repo.name} has uncommitted changes")
+                print(f"[yellow]⚠️  Repository {repo.name} has uncommitted changes. Will continue with update but merge conflicts may occur.")
+            else:
+                progress.update(task, description=f"[green]Repository {repo.name} is clean")
+
             # Remote update
             task = progress.add_task(f"[cyan]Remote Update for {repo.name}", total=None)
             result = subprocess.run(

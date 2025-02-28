@@ -1,19 +1,26 @@
 # Update Janitor
 A system update utility that automates the process of keeping your environment up-to-date.
 
-
 ## Overview
 
 Update Janitor is a Python-based tool designed to streamline the maintenance of various components in your environment. It provides a unified interface for updating:
 
 - Homebrew packages
 - Python packages
-- APT packages (Linux)
+- APT packages (Debian-based Linux)
 - Ruby gems (macOS)
 - Git repositories
 - Apple system updates + App store updates (macOS)
 
 The tool features both interactive and non-interactive modes, real-time status tracking with rich terminal output, and robust error handling.
+
+## Platform Support
+
+Currently, Update Janitor supports:
+- **macOS**: Full support including Homebrew, Python, Ruby gems, Git repositories, and Apple system updates
+- **Debian-based Linux**: Support for APT packages, Homebrew (if installed), Python packages, and Git repositories
+
+> **Note**: Windows support is planned for future releases.
 
 ## Features
 
@@ -34,7 +41,7 @@ The tool features both interactive and non-interactive modes, real-time status t
 - Package managers corresponding to the components you want to update:
     - Homebrew (macOS/Linux)
     - Pip (Python)
-    - Apt (Linux)
+    - Apt (Debian-based Linux)
     - Gem (Ruby, macOS)
     - Git
 
@@ -117,6 +124,13 @@ To add support for additional package managers:
 1. Create a new updater class in the `updaters` directory, inheriting from `BaseUpdater`
 2. Implement the required methods: `update()` and `update_async()`
 3. Add your updater to the `get_available_updaters()` function in `updaters/__init__.py`
+
+## Future Enhancements
+
+- Windows support with appropriate package managers (Chocolatey, Scoop, etc.)
+- Configuration file support for customizing update behavior
+- Support for more Linux distributions (RPM-based systems, Arch Linux, etc.)
+- Scheduled updates with cron/launchd integration
 
 ## License
 

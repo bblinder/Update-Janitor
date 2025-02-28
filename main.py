@@ -52,6 +52,17 @@ async def main() -> int:
     # Getting the current event loop
     loop = asyncio.get_running_loop()
 
+    # Check for supported OS
+    if sys.platform not in ["darwin", "linux"]:
+        print("WARNING: This tool has only been tested on MacOS and Debian-based Linux distributions.")
+        print("Windows support is planned for future releases.")
+        print("Some features may not work correctly on your system.")
+
+        # Ask user if they want to continue
+        if input("Continue anyway? [y/N] --> ").lower() != "y":
+            print("Exiting.")
+            return 0
+
     # Setup traditional signal handlers
     setup_signal_handlers()
 
@@ -76,63 +87,91 @@ async def main() -> int:
 
             # Setup password manager - only if needed by any updater
             password_manager = None
-            if any(updater.requires_sudo for updater in updaters.values()):
-                password_manager = PasswordManager()
-                # Don't get the password yet -- wait until it's needed.
-                # password = password_manager.get_password() if password_manager else None
-
             try:
-                if args.no_input:
-                    # Non-interactive mode
-                    print("::: Running in non-interactive mode")
+                if any(updater.requires_sudo for updater in updaters.values()):
+                    password_manager = PasswordManager()
 
-                    # Create task list based on OS and available updaters
-                    tasks = []
+                try:
+                    if args.no_input:
+                        # Non-interactive mode
+                        print("::: Running in non-interactive mode")
 
-                    for name, updater in updaters.items():
-                        if updater.requires_sudo and password_manager:
-                            tasks.append(updater.update_async(args, password_manager.get_password()))
-                        else:
-                            tasks.append(updater.update_async(args))
+                        # Create task list based on OS and available updaters
+                        tasks = []
+                        task_names = []  # Keep track of which task is which
 
-                    try:
-                        # Run all tasks concurrently
-                        await asyncio.gather(*tasks, return_exceptions=True)
-                    except await asyncio.CancelledError:
-                        print("::: Tasks were cancelled during shutdown")
-                        # Let the cancellation propagate
-                        raise
-                else:
-                    # Interactive mode
-                    print("::: Running in interactive mode")
-
-                    for name, updater in updaters.items():
-                        status_tracker.update(name, "not_started")
-                        status_tracker.render()
-
-                        user_choice = input(f"Update {name}? [y/N] --> ")
-                        if user_choice.lower() == "y":
+                        for name, updater in updaters.items():
+                            task_names.append(name)
+                            status_tracker.update(name, "in_progress")
                             if updater.requires_sudo and password_manager:
-                                await updater.update_async(args, password_manager.get_password())
+                                tasks.append(updater.update_async(args, password_manager.get_password()))
                             else:
-                                await updater.update_async(args)
-                            status_tracker.update(name, "done")
-                        else:
-                            print(f"::: Skipping {name} update")
-                            status_tracker.update(name, "skipped")
+                                tasks.append(updater.update_async(args))
 
-                print("::: All updates completed successfully!")
-                return 0
+                        try:
+                            # Run all tasks concurrently
+                            results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            except KeyboardInterrupt:
-                print("\n::: Program interrupted by user. Exiting gracefully...")
-                return 130  # Standard exit code for SIGINT
-            except asyncio.CancelledError:
-                print("\n::: Tasks cancelled. Exiting gracefully...")
-                return 1
-            except Exception as e:
-                handle_error("main process", str(e), "error")
-                return 1
+                            # Process results
+                            for i, result in enumerate(results):
+                                if isinstance(result, Exception):
+                                    name = task_names[i]
+                                    print(f"::: Error updating {name}: {str(result)}")
+                                    status_tracker.update(name, "failed")
+                                    logging.exception(f"Error during {name} update", exc_info=result)
+                        except asyncio.CancelledError:
+                            print("::: Tasks were cancelled during shutdown")
+                            # Update all in-progress tasks as failed
+                            for name in task_names:
+                                if status_tracker.get_status(name) == "in_progress":
+                                    status_tracker.update(name, "failed")
+                            # Let the cancellation propagate
+                            raise
+                    else:
+                        # Interactive mode
+                        print("::: Running in interactive mode")
+
+                        for name, updater in updaters.items():
+                            status_tracker.update(name, "not_started")
+                            status_tracker.render()
+
+                            user_choice = input(f"Update {name}? [y/N] --> ")
+                            if user_choice.lower() == "y":
+                                try:
+                                    if updater.requires_sudo and password_manager:
+                                        await updater.update_async(args, password_manager.get_password())
+                                    else:
+                                        await updater.update_async(args)
+                                    status_tracker.update(name, "done")
+                                except asyncio.CancelledError:
+                                    print(f"::: {name} update was cancelled")
+                                    status_tracker.update(name, "failed")
+                                    raise  # Re-raise to exit the program
+                                except Exception as e:
+                                    print(f"::: Error updating {name}: {str(e)}")
+                                    status_tracker.update(name, "failed")
+                                    logging.exception(f"Error during {name} update")
+                                    # Continue with next updater instead of failing the entire program
+                            else:
+                                print(f"::: Skipping {name} update")
+                                status_tracker.update(name, "skipped")
+
+                    print("::: All updates completed successfully!")
+                    return 0
+
+                except KeyboardInterrupt:
+                    print("\n::: Program interrupted by user. Exiting gracefully...")
+                    return 130  # Standard exit code for SIGINT
+                except asyncio.CancelledError:
+                    print("\n::: Tasks cancelled. Exiting gracefully...")
+                    return 1
+                except Exception as e:
+                    handle_error("main process", str(e), "error")
+                    return 1
+            finally:
+                # Ensure password manager is cleaned up
+                if password_manager:
+                    password_manager.__exit__(None, None, None)
 
     except TimeoutError:
         print("::: Another instance of the script is already running. Exiting...")
