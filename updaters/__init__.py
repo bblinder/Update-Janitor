@@ -28,7 +28,7 @@ def get_available_updaters(github_dir, status_tracker):
     if os_platform == "darwin" and shutil.which("gem"):
         updaters["Ruby"] = RubyUpdater(github_dir, status_tracker)
 
-    if github_dir.exists():
+    if github_dir.exists() and shutil.which("git"):
         updaters["Git"] = GitUpdater(github_dir, status_tracker)
 
     if os_platform == "darwin":
