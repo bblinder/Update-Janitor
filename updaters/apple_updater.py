@@ -13,17 +13,14 @@ class AppleUpdater(BaseUpdater):
         self.requires_sudo = False
 
     def update(self, args, password=None):
-        """Update MacOS software."""
+        """List available MacOS software updates without installing system updates."""
         if sys.platform == "darwin":
             print("::: Checking for MacOS software updates")
             try:
-                # Check for system updates
-                subprocess.run(["softwareupdate", "--list"], check=False)
-
-                # Try to install recommended updates if no input required
+                # Check for system updates (list only, don't install)
                 if shutil.which("softwareupdate"):
-                    print("::: Installing recommended updates (may require interactive input)")
-                    subprocess.run(["softwareupdate", "--install", "--recommended"], check=False)
+                    print("::: Available system updates:")
+                    subprocess.run(["softwareupdate", "--list"], check=False)
 
                 # Check for App Store updates
                 if shutil.which("mas"):
@@ -45,7 +42,7 @@ class AppleUpdater(BaseUpdater):
             except Exception as e:
                 handle_error(["apple-update"], str(e))
         else:
-            print("::: Not running MacOS, skipping Apple updates")
+            print("::: Not running MacOS, skipping Apple updates check")
 
     async def update_async(self, args, password=None):
         self.status_tracker.update("Apple Updates", "in_progress")
