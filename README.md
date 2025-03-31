@@ -1,4 +1,5 @@
 # Update Janitor
+
 A system update utility that automates the process of keeping your environment up-to-date.
 
 ## Overview
@@ -17,6 +18,7 @@ The tool features both interactive and non-interactive modes, real-time status t
 ## Platform Support
 
 Currently, Update Janitor supports:
+
 - **macOS**: Full support including Homebrew, Python, Ruby gems, Git repositories, and Apple system updates
 - **Debian-based Linux**: Support for APT packages, Homebrew (if installed), Python packages, and Git repositories
 
@@ -29,7 +31,7 @@ Currently, Update Janitor supports:
 - **Interactive Mode**: Choose which components to update
 - **Non-Interactive Mode**: Run all updates without prompts (great for scheduled tasks)
 - **Real-time Status Tracking**: Visual feedback on update progress
-- **Virtual Environment**: Automatically bootstraps a Python virtual environment
+- **Dependency Management**: Uses uv and PEP 723 for efficient dependency management
 - **Error Handling**: Comprehensive error management with logging
 - **Concurrent Updates**: Uses asyncio for efficient parallel processing
 
@@ -37,6 +39,7 @@ Currently, Update Janitor supports:
 ## Requirements
 
 - Python 3.9+
+- uv (for dependency management)
 - Sudo privileges (for some updaters)
 - Package managers corresponding to the components you want to update:
     - Homebrew (macOS/Linux)
@@ -48,28 +51,35 @@ Currently, Update Janitor supports:
 
 ## Installation
 
-1. Clone the repository:
+1. Install uv:
+```bash
+pip install uv
+```
 
+Or via homebrew:
+```bash
+brew install uv
+```
+
+2. Clone the repository:
 ```bash
 git clone https://github.com/bblinder/update-janitor.git
 cd Update-Janitor
 ```
 
-2. Run the script:
-
+3. Run the script:
 ```bash
-python3 main.py
+./main.py
 ```
 
-
-The script will automatically set up a virtual environment and install required dependencies on first run.
+The script will automatically handle dependencies using uv and PEP 723.
 
 ## Usage
 
 ### Interactive Mode
 
 ```bash
-python3 main.py
+./main.py
 ```
 
 This will prompt you for each component, allowing you to choose which ones to update.
@@ -77,7 +87,7 @@ This will prompt you for each component, allowing you to choose which ones to up
 ### Non-Interactive Mode
 
 ```bash
-python3 main.py -y
+./main.py -y
 ```
 
 Updates all available components without prompting.
@@ -85,7 +95,7 @@ Updates all available components without prompting.
 ### Debug Mode
 
 ```bash
-python3 main.py --debug
+./main.py --debug
 ```
 
 Enables detailed logging for troubleshooting.
@@ -111,9 +121,8 @@ update-janitor/
 │   ├── error_handler.py     # Error management
 │   ├── password_manager.py  # Secure password handling
 │   └── status_tracker.py    # Update status visualization
-├── bootstrap.py             # Virtual environment setup
-├── main.py                  # Main application entry point
-└── requirements.txt         # Python dependencies
+├── main.py                  # Main application entry point (with uv integration)
+└── requirements.txt         # Python dependencies (referenced by PEP 723)
 ```
 
 
@@ -131,6 +140,7 @@ To add support for additional package managers:
 - Configuration file support for customizing update behavior
 - Support for more Linux distributions (RPM-based systems, Arch Linux, etc.)
 - Scheduled updates with cron/launchd integration
+
 
 ## License
 
@@ -150,3 +160,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 - [Rich](https://github.com/Textualize/rich) for beautiful terminal output
 - [FileLock](https://github.com/tox-dev/py-filelock) for process locking
+- [uv](https://github.com/astral-sh/uv) for fast, reliable Python packaging

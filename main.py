@@ -1,12 +1,18 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# dependencies = [
+#     "simple-colors",
+#     "pip-review",
+#     "pexpect",
+#     "rich",
+#     "filelock",
+#     "pip"
+# ]
+# ///
 
 import asyncio
 import sys
 from pathlib import Path
-
-# Bootstrap the virtual environment
-from bootstrap import bootstrap_venv
-bootstrap_venv()
 
 from utils.status_tracker import StatusTracker
 from utils.password_manager import PasswordManager
@@ -188,4 +194,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n::: Program interrupted by user. Exiting gracefully...")
         sys.exit(130)  # Standard exit code for SIGINT
-
