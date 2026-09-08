@@ -1,70 +1,57 @@
-import asyncio
+import json
 import subprocess
-import re
-from functools import partial
+import sys
 
 from .base_updater import BaseUpdater
 
-class PythonUpdater(BaseUpdater):
-    def __init__(self, github_dir, status_tracker):
-        super().__init__(github_dir, status_tracker)
-        self.requires_sudo = False
+# Interpreter whose packages get upgraded. Under `uv run --script`, sys.executable
+# is the ephemeral script environment; point this at your primary interpreter
+# (e.g. "/usr/bin/python3") if that is the environment you want to maintain.
+PYTHON_BIN = sys.executable
 
-    def pip_upgrade_new(self):
-        try:
-            subprocess.run(
-                ["python3", "-m", "pip_review", "--auto", "--continue-on-fail"],
-                check=False
-            )
-        except Exception as e:
-            print(f"::: Error with pip-review: {str(e)}")
-            raise
+
+class PythonUpdater(BaseUpdater):
+    name = "Python"
+
+    def pip_upgrade_new(self) -> bool:
+        """Upgrade outdated packages via pip-review. Returns True on success."""
+        result = subprocess.run(
+            [PYTHON_BIN, "-m", "pip_review", "--auto", "--continue-on-fail"],
+            check=False,
+        )
+        return result.returncode == 0
 
     def pip_upgrade_old(self):
-        try:
-            result = subprocess.run(
-                ["python3", "-m", "pip", "list", "--outdated"],
-                capture_output=True,
+        """Fallback: ask pip for outdated packages as JSON and upgrade them."""
+        result = subprocess.run(
+            [PYTHON_BIN, "-m", "pip", "list", "--outdated", "--format", "json"],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+        if result.returncode != 0:
+            self.log(f"Error listing outdated packages: {result.stderr.strip()}")
+            return
+
+        packages = [pkg["name"] for pkg in json.loads(result.stdout)]
+        if packages:
+            subprocess.run(
+                [PYTHON_BIN, "-m", "pip", "install", "--upgrade", *packages],
                 check=False,
-                text=True
             )
-
-            if result.returncode != 0:
-                print(f"::: Error listing outdated packages: {result.stderr}")
-                return
-
-            pip_packages = []
-            for line in result.stdout.strip().split("\n"):
-                if re.search(r"\s\d+\.", line):
-                    pip_packages.append(line.split(" ")[0])
-
-            if pip_packages:
-                subprocess.run(
-                    ["python3", "-m", "pip", "install", "--upgrade"] + pip_packages,
-                    check=False
-                )
-        except Exception as e:
-            print(f"::: Error upgrading pip packages: {str(e)}")
 
     def update(self, args, password=None):
         """Update python packages."""
-        print("::: Updating python packages")
+        self.log("Updating python packages")
         try:
-            self.pip_upgrade_new()
-        except Exception:
-            print("::: Failed with pip-review, trying the old method...")
-            self.pip_upgrade_old()
+            succeeded = self.pip_upgrade_new()
+        except OSError as e:
+            self.log(f"pip-review unavailable: {e}")
+            succeeded = False
 
-    async def update_async(self, args, password=None):
-        self.status_tracker.update("Python", "in_progress")
-        try:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, partial(self.update, args))
-            self.status_tracker.update("Python", "done")
-        except asyncio.CancelledError:
-            self.status_tracker.update("Python", "failed")
-            print("::: Python update cancelled")
-            raise
-        except Exception as e:
-            print(f"::: Error updating Python: {str(e)}")
-            self.status_tracker.update("Python", "failed")
+        if not succeeded:
+            self.log("Falling back to the pip list method")
+            try:
+                self.pip_upgrade_old()
+            except (OSError, json.JSONDecodeError) as e:
+                self.log(f"Error upgrading pip packages: {e}")

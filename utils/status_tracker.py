@@ -1,58 +1,70 @@
 from rich.console import Console
+from rich.live import Live
 from rich.table import Table
 from rich.text import Text
 
+
 class StatusTracker:
-    """Class to track and display status of tasks"""
+    """Track task statuses and render them as a live-updating table."""
 
     STATES = {
-        "not_started": "⏳ Not Started",
-        "in_progress": "🔄 In Progress",
-        "done": "✅ Done",
-        "failed": "❌ Failed",
-        "skipped": "⏭️ Skipped"
+        "not_started": ("⏳ Not Started", ""),
+        "in_progress": ("🔄 In Progress", "yellow"),
+        "done": ("✅ Done", "green"),
+        "failed": ("❌ Failed", "red bold"),
+        "skipped": ("⏭️ Skipped", "blue"),
     }
 
-    def __init__(self):
-        self.tasks = {
-            "Homebrew": "not_started",
-            "Python": "not_started",
-            "APT": "not_started",
-            "Ruby": "not_started",
-            "Git": "not_started",
-            "Apple Updates": "not_started"
-        }
+    def __init__(self, task_names=()):
+        self.tasks = {name: "not_started" for name in task_names}
         self.console = Console()
+        self._live = None
+
+    def set_tasks(self, task_names):
+        """Register the tasks to display. Call before start()."""
+        self.tasks = {name: "not_started" for name in task_names}
+
+    def start(self):
+        if self._live is None:
+            self._live = Live(self._render_table(), console=self.console, auto_refresh=False)
+            self._live.start()
+
+    def stop(self):
+        if self._live is not None:
+            self._live.stop()
+
+    def pause(self):
+        """Hide the live table temporarily (e.g. for input prompts)."""
+        if self._live is not None:
+            self._live.stop()
+
+    def resume(self):
+        if self._live is not None:
+            self._live.start()
+            self._live.update(self._render_table(), refresh=True)
 
     def update(self, task, status):
-        """Update the status of a task"""
+        """Update the status of a task and refresh the table."""
         if task in self.tasks and status in self.STATES:
             self.tasks[task] = status
-            self.render()
+            if self._live is not None:
+                self._live.update(self._render_table(), refresh=True)
 
     def get_status(self, task):
-        """Get the status of a task"""
         return self.tasks.get(task, "not_started")
 
-    def render(self):
-        """Render the status table with rich formatting"""
+    def log(self, message):
+        """Print above the live table; plain print before start()."""
+        if self._live is not None:
+            self.console.print(message)
+        else:
+            print(message)
+
+    def _render_table(self):
         table = Table(title="System Update Status")
         table.add_column("Task", style="cyan")
         table.add_column("Status")
-
         for task, status in self.tasks.items():
-            status_text = self.STATES[status]
-
-            if status == "done":
-                table.add_row(task, Text(status_text, style="green"))
-            elif status == "failed":
-                table.add_row(task, Text(status_text, style="red bold"))
-            elif status == "in_progress":
-                table.add_row(task, Text(status_text, style="yellow"))
-            elif status == "skipped":
-                table.add_row(task, Text(status_text, style="blue"))
-            else:  # not_started
-                table.add_row(task, Text(status_text))
-
-        self.console.clear()
-        self.console.print(table)
+            label, style = self.STATES[status]
+            table.add_row(task, Text(label, style=style))
+        return table

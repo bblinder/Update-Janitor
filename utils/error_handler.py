@@ -1,47 +1,33 @@
+import asyncio
 import logging
 import signal
-import sys
+
 
 def handle_error(command, error, severity="warning"):
-    """Centralized error handling for command failures."""
-    if isinstance(command, list):
-        cmd_str = ' '.join(command)
-    else:
-        cmd_str = str(command)
+    """Log and print a command failure."""
+    cmd_str = " ".join(command) if isinstance(command, list) else str(command)
+    message = f"Error running {cmd_str}: {error}"
 
-    error_msg = f"Error running {cmd_str}: {error}"
+    log = logging.error if severity == "error" else logging.warning
+    log(message)
+    print(f"{severity.upper()}: {message}")
 
-    if severity == "critical":
-        logging.critical(error_msg)
-        print(f"CRITICAL: {error_msg}")
-        sys.exit(1)
-    elif severity == "error":
-        logging.error(error_msg)
-        print(f"ERROR: {error_msg}")
-    else:
-        logging.warning(error_msg)
-        print(f"WARNING: {error_msg}")
 
-def setup_signal_handlers(loop=None):
-    """Setup signal handlers for graceful shutdown"""
-    # We'll use the original system signal handler for terminal signals
-    # Instead of trying to manage asyncio loop shutdown
-    original_sigint = signal.getsignal(signal.SIGINT)
-    original_sigterm = signal.getsignal(signal.SIGTERM)
+def setup_signal_handlers(loop):
+    """Cancel running tasks on SIGINT/SIGTERM, then unwind via KeyboardInterrupt.
 
-    def signal_handler(sig, frame):
-        print("\n::: Received interrupt signal. Gracefully shutting down...")
-        # If we have a loop, cancel all tasks
-        if loop:
-            for task in asyncio.all_tasks(loop):
-                task.cancel()
-        # Otherwise call the original handler
-        if sig == signal.SIGINT and original_sigint != signal.SIG_DFL and original_sigint != signal.SIG_IGN:
-            original_sigint(sig, frame)
-        if sig == signal.SIGTERM and original_sigterm != signal.SIG_DFL and original_sigterm != signal.SIG_IGN:
-            original_sigterm(sig, frame)
-        # If we get here, there was no original handler, so just exit
-        sys.exit(0)
+    asyncio.run() finishes the job by cancelling anything still pending;
+    executor threads are allowed to complete their current command.
+    """
+    def handler(sig, frame):
+        print("\n::: Interrupt received. Cancelling running tasks...")
+        loop.call_soon_threadsafe(_cancel_all, loop)
+        raise KeyboardInterrupt
 
     for sig in (signal.SIGINT, signal.SIGTERM):
-        signal.signal(sig, signal_handler)
+        signal.signal(sig, handler)
+
+
+def _cancel_all(loop):
+    for task in asyncio.all_tasks(loop):
+        task.cancel()

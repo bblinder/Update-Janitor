@@ -9,18 +9,17 @@ Update Janitor is a Python-based tool designed to streamline the maintenance of 
 - Homebrew packages
 - Python packages
 - APT packages (Debian-based Linux)
-- Ruby gems (macOS)
 - Git repositories
-- Apple system updates + App store updates (macOS)
+- Apple system updates + App Store updates (macOS)
 
-The tool features both interactive and non-interactive modes, real-time status tracking with rich terminal output, and robust error handling.
+The tool features both interactive and non-interactive modes, live status tracking with rich terminal output, and robust error handling.
 
 ## Platform Support
 
 Currently, Update Janitor supports:
 
-- **macOS**: Full support including Homebrew, Python, Ruby gems, Git repositories, and Apple system updates
-- **Debian-based Linux**: Support for APT packages, Homebrew (if installed), Python packages, and Git repositories
+- **macOS**: Homebrew, Python, Git repositories, and Apple system/App Store updates
+- **Debian-based Linux**: APT packages, Homebrew (if installed), Python packages, and Git repositories
 
 > **Note**: Windows support is planned for future releases.
 
@@ -30,24 +29,23 @@ Currently, Update Janitor supports:
 - **Git Repository Management**: Automatically updates all Git repositories in a specified directory
 - **Interactive Mode**: Choose which components to update
 - **Non-Interactive Mode**: Run all updates without prompts (great for scheduled tasks)
-- **Real-time Status Tracking**: Visual feedback on update progress
-- **Dependency Management**: Uses uv and PEP 723 for efficient dependency management
-- **Error Handling**: Comprehensive error management with logging
+- **Live Status Tracking**: A `rich` Live table refreshes in place without clearing scrollback
+- **Dependency Management**: Uses uv and PEP 723 for inline dependency management (no requirements.txt)
+- **Error Handling**: Centralized error logging with a persistent log file
 - **Concurrent Updates**: Uses asyncio for efficient parallel processing
-
+- **Single Instance**: A file lock prevents overlapping runs
 
 ## Requirements
 
 - Python 3.9+
 - uv (for dependency management)
-- Sudo privileges (for some updaters)
+- Sudo privileges (for the APT updater)
 - Package managers corresponding to the components you want to update:
     - Homebrew (macOS/Linux)
     - Pip (Python)
     - Apt (Debian-based Linux)
-    - Gem (Ruby, macOS)
     - Git
-
+    - mas (macOS App Store updates, optional)
 
 ## Installation
 
@@ -72,7 +70,7 @@ cd Update-Janitor
 ./main.py
 ```
 
-The script will automatically handle dependencies using uv and PEP 723.
+Dependencies are declared inline in `main.py` via PEP 723; uv resolves them automatically.
 
 ## Usage
 
@@ -102,37 +100,38 @@ Enables detailed logging for troubleshooting.
 
 ## Configuration
 
-By default, the script looks for Git repositories in `~/Github`. You can modify this path in `main.py` by changing the `GITHUB_DIR` constant.
+- `GITHUB_DIR` in `main.py`: directory scanned for Git repositories (default `~/Github`)
+- `DOCTOR_PROBABILITY` in `updaters/homebrew_updater.py`: odds of running `brew doctor` on any given run (default `0.25`)
+- `PYTHON_BIN` in `updaters/python_updater.py`: interpreter whose pip packages get upgraded (default `sys.executable`)
 
 ## Project Structure
 
 ```
 update-janitor/
 ├── updaters/                # Package manager modules
-│   ├── __init__.py          # Updater initialization
-│   ├── apple_updater.py     # macOS system updates
+│   ├── __init__.py          # Updater factory (availability detection)
+│   ├── apple_updater.py     # macOS system + App Store updates
 │   ├── apt_updater.py       # Linux APT package manager
-│   ├── base_updater.py      # Base class for updaters
+│   ├── base_updater.py      # Base class: status tracking, sudo helper, async wrapper
 │   ├── git_updater.py       # Git repository management
 │   ├── homebrew_updater.py  # Homebrew package manager
-│   ├── python_updater.py    # Python package manager
-│   └── ruby_updater.py      # Ruby gems manager
+│   └── python_updater.py    # Python package manager
 ├── utils/                   # Utility modules
-│   ├── error_handler.py     # Error management
-│   ├── password_manager.py  # Secure password handling
-│   └── status_tracker.py    # Update status visualization
-├── main.py                  # Main application entry point (with uv integration)
-└── requirements.txt         # Python dependencies (referenced by PEP 723)
+│   ├── error_handler.py     # Error logging + signal handling
+│   ├── password_manager.py  # Sudo password prompting and refresh
+│   └── status_tracker.py    # Live status table (rich)
+└── main.py                  # Entry point (PEP 723 inline dependencies)
 ```
-
 
 ## Extending the Tool
 
-To add support for additional package managers:
+To add support for an additional package manager:
 
 1. Create a new updater class in the `updaters` directory, inheriting from `BaseUpdater`
-2. Implement the required methods: `update()` and `update_async()`
-3. Add your updater to the `get_available_updaters()` function in `updaters/__init__.py`
+2. Set `name`, implement `update(args, password=None)`, and optionally override `is_available()` and `requires_sudo`
+3. Register the class in `get_available_updaters()` in `updaters/__init__.py`
+
+Status tracking, executor offload, sudo handling, and cancellation semantics are inherited from the base class — subclasses contain only the update logic itself.
 
 ## Future Enhancements
 
@@ -140,7 +139,6 @@ To add support for additional package managers:
 - Configuration file support for customizing update behavior
 - Support for more Linux distributions (RPM-based systems, Arch Linux, etc.)
 - Scheduled updates with cron/launchd integration
-
 
 ## License
 

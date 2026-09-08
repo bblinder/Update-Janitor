@@ -1,50 +1,37 @@
-import asyncio
-import subprocess
 import random
-from functools import partial
+import shutil
+import subprocess
+import sys
 
 from .base_updater import BaseUpdater
 
+DOCTOR_PROBABILITY = 0.25  # run brew doctor on roughly 1 in 4 runs
+
+
 class HomebrewUpdater(BaseUpdater):
-    def __init__(self, github_dir, status_tracker):
-        super().__init__(github_dir, status_tracker)
-        self.requires_sudo = False
+    name = "Homebrew"
 
-    def run_brew_doctor(self):
-        print("::: Running brew doctor")
-        subprocess.run(["brew", "doctor"], check=False)
+    @classmethod
+    def is_available(cls) -> bool:
+        return sys.platform in ("linux", "darwin") and shutil.which("brew") is not None
 
-    def update_homebrew(self):
-        print("::: Updating Homebrew")
+    def update(self, args, password=None):
+        """Update homebrew packages."""
+        if random.random() < DOCTOR_PROBABILITY:
+            self.log("Running brew doctor")
+            subprocess.run(["brew", "doctor"], check=False)
+
+        self.log("Updating Homebrew")
         subprocess.run(["brew", "update"], check=False)
         subprocess.run(["brew", "upgrade"], check=False)
         subprocess.run(["brew", "upgrade", "--cask", "--greedy"], check=False)
 
-    def cleanup_homebrew(self):
-        print("::: Running brew cleanup")
-        subprocess.run(["brew", "cleanup"], check=False)
-        subprocess.run(["brew", "cleanup", "-s", "--prune=all"], check=False)
-
-    def update(self, args, password=None):
-        """Update homebrew packages."""
-        if random.randint(0, 3) == 1:
-            self.run_brew_doctor()
-
-        self.update_homebrew()
-
-        if args.no_input or input("Cleanup Homebrew? [y/N] --> ").lower() == "y":
-            self.cleanup_homebrew()
-
-    async def update_async(self, args, password=None):
-        self.status_tracker.update("Homebrew", "in_progress")
+        self.status_tracker.pause()
         try:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, partial(self.update, args))
-            self.status_tracker.update("Homebrew", "done")
-        except asyncio.CancelledError:
-            self.status_tracker.update("Homebrew", "failed")
-            print("::: Homebrew update cancelled")
-            raise
-        except Exception as e:
-            print(f"::: Error updating Homebrew: {str(e)}")
-            self.status_tracker.update("Homebrew", "failed")
+            wants_cleanup = args.no_input or input("Cleanup Homebrew? [y/N] --> ").lower() == "y"
+        finally:
+            self.status_tracker.resume()
+
+        if wants_cleanup:
+            self.log("Running brew cleanup")
+            subprocess.run(["brew", "cleanup", "-s", "--prune=all"], check=False)

@@ -1,62 +1,33 @@
-import asyncio
+import shutil
 import subprocess
 import sys
-import shutil
-from functools import partial
 
 from .base_updater import BaseUpdater
-from utils.error_handler import handle_error
+
 
 class AppleUpdater(BaseUpdater):
-    def __init__(self, github_dir, status_tracker):
-        super().__init__(github_dir, status_tracker)
-        self.requires_sudo = False
+    name = "Apple Updates"
+
+    @classmethod
+    def is_available(cls) -> bool:
+        return sys.platform == "darwin"
 
     def update(self, args, password=None):
-        """List available MacOS software updates without installing system updates."""
-        if sys.platform == "darwin":
-            print("::: Checking for MacOS software updates")
-            try:
-                # Check for system updates (list only, don't install)
-                if shutil.which("softwareupdate"):
-                    print("::: Available system updates:")
-                    subprocess.run(["softwareupdate", "--list"], check=False)
+        """List macOS system updates and install App Store updates via mas."""
+        if shutil.which("softwareupdate"):
+            self.log("Available system updates:")
+            subprocess.run(["softwareupdate", "--list"], check=False)
 
-                # Check for App Store updates
-                if shutil.which("mas"):
-                    print("::: Checking for App Store updates")
-                    outdated_result = subprocess.run(
-                        ["mas", "outdated"],
-                        check=False,
-                        capture_output=True,
-                        text=True
-                    )
+        if not shutil.which("mas"):
+            self.log("'mas' command not found, skipping App Store updates")
+            return
 
-                    if outdated_result.returncode == 0 and outdated_result.stdout.strip():
-                        print("::: Installing App Store updates")
-                        subprocess.run(["mas", "upgrade"], check=False)
-                    else:
-                        print("::: No App Store updates available")
-                else:
-                    print("::: 'mas' command not found, skipping App Store updates")
-            except Exception as e:
-                handle_error(["apple-update"], str(e))
+        self.log("Checking for App Store updates")
+        outdated = subprocess.run(
+            ["mas", "outdated"], check=False, capture_output=True, text=True
+        )
+        if outdated.returncode == 0 and outdated.stdout.strip():
+            self.log("Installing App Store updates")
+            subprocess.run(["mas", "upgrade"], check=False)
         else:
-            print("::: Not running MacOS, skipping Apple updates check")
-
-    async def update_async(self, args, password=None):
-        self.status_tracker.update("Apple Updates", "in_progress")
-        try:
-            if sys.platform == "darwin":
-                loop = asyncio.get_event_loop()
-                await loop.run_in_executor(None, partial(self.update, args))
-                self.status_tracker.update("Apple Updates", "done")
-            else:
-                self.status_tracker.update("Apple Updates", "skipped")
-        except asyncio.CancelledError:
-            self.status_tracker.update("Apple Updates", "failed")
-            print("::: Apple update cancelled")
-            raise
-        except Exception as e:
-            print(f"::: Error updating Apple: {str(e)}")
-            self.status_tracker.update("Apple Updates", "failed")
+            self.log("No App Store updates available")
