@@ -47,12 +47,7 @@ def parse_args() -> argparse.Namespace:
 async def _run_one(updater, args, password_manager):
     password = None
     if updater.requires_sudo:
-        tracker = updater.status_tracker
-        tracker.pause()
-        try:
-            password = password_manager.get_password()
-        finally:
-            tracker.resume()
+        password = password_manager.get_password()
     await updater.update_async(args, password)
 
 
@@ -64,14 +59,10 @@ async def run_batch(updaters, args, password_manager):
 async def run_interactive(updaters, args, password_manager, status_tracker):
     """Interactive mode: prompt for each updater, then run it."""
     for name, updater in updaters.items():
-        status_tracker.pause()
-        try:
-            choice = input(f"Update {name}? [y/N] --> ")
-        finally:
-            status_tracker.resume()
+        choice = input(f"Update {name}? [y/N] --> ")
 
         if choice.lower() != "y":
-            status_tracker.log(f"Skipping {name}")
+            status_tracker.log(f"::: Skipping {name} update")
             status_tracker.update(name, "skipped")
             continue
 

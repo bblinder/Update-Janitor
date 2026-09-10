@@ -1,83 +1,76 @@
-from rich import box
 from rich.console import Console
-from rich.live import Live
 from rich.table import Table
 from rich.text import Text
 
 
 class StatusTracker:
-    """Track task statuses and render them as a left-aligned live table."""
+    """Track and display status of tasks using clear-and-render."""
 
-    # Emoji are chosen to be unambiguously double-width (East Asian Width = W)
-    # so rich's cell math matches what real terminals draw.
     STATES = {
-        "not_started": ("⏳ Not Started", ""),
-        "in_progress": ("🔄 In Progress", "yellow"),
-        "done": ("✅ Done", "green"),
-        "failed": ("❌ Failed", "red bold"),
-        "skipped": ("⏩ Skipped", "blue"),
+        "not_started": "⏳ Not Started",
+        "in_progress": "🔄 In Progress",
+        "done": "✅ Done",
+        "failed": "❌ Failed",
+        "skipped": "⏩ Skipped",
     }
 
     def __init__(self, task_names=()):
         self.tasks = {name: "not_started" for name in task_names}
         self.console = Console()
-        self._live = None
 
     def set_tasks(self, task_names):
-        """Register the tasks to display. Call before start()."""
+        """Register the tasks to track."""
         self.tasks = {name: "not_started" for name in task_names}
 
     def start(self):
-        if self._live is None:
-            self._live = Live(
-                self._render_table(),
-                console=self.console,
-                auto_refresh=False,
-                vertical_overflow="visible",
-            )
-            self._live.start()
+        """Render initial table view."""
+        self.render()
 
     def stop(self):
-        if self._live is not None:
-            self._live.stop()
-            self._live = None
+        """Finalize the tracker view."""
+        self.render()
 
     def pause(self):
-        """Hide the live table temporarily (e.g. for input prompts)."""
-        if self._live is not None:
-            self._live.stop()
+        """No-op retained for interface compatibility."""
+        pass
 
     def resume(self):
-        if self._live is not None:
-            self._live.start()
-            self._live.update(self._render_table(), refresh=True)
+        """No-op retained for interface compatibility."""
+        pass
 
     def update(self, task, status):
-        """Update the status of a task and refresh the table."""
+        """Update the status of a task and redraw the table."""
         if task in self.tasks and status in self.STATES:
             self.tasks[task] = status
-            if self._live is not None:
-                self._live.update(self._render_table(), refresh=True)
+            self.render()
 
     def get_status(self, task):
+        """Get the current status of a task."""
         return self.tasks.get(task, "not_started")
 
     def log(self, message):
-        """Print a log line above the live table."""
-        if self._live is not None:
-            self._live.console.print(message)
-        else:
-            self.console.print(message)
+        """Print status messages directly to standard output."""
+        print(message)
 
-    def _render_table(self):
-        table = Table(
-            title="System Update Status",
-            title_justify="left",
-            box=box.ROUNDED,
-        )
-        table.add_column("Task", style="cyan", no_wrap=True)
-        table.add_column("Status", no_wrap=True)
+    def render(self):
+        """Render the status table with original clean styling."""
+        table = Table(title="System Update Status")
+        table.add_column("Task", style="cyan")
+        table.add_column("Status")
+
         for task, status in self.tasks.items():
-            label, style = self.STATES[status]
-            table.add_row(task, Text(label, style=style))
-        return table
+            status_text = self.STATES[status]
+
+            if status == "done":
+                table.add_row(task, Text(status_text, style="green"))
+            elif status == "failed":
+                table.add_row(task, Text(status_text, style="red bold"))
+            elif status == "in_progress":
+                table.add_row(task, Text(status_text, style="yellow"))
+            elif status == "skipped":
+                table.add_row(task, Text(status_text, style="blue"))
+            else:
+                table.add_row(task, Text(status_text))
+
+        self.console.clear()
+        self.console.print(table)
